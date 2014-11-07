@@ -1,3 +1,14 @@
+# this function extracts the bare essentials about nodes from the raw files. 
+## it expects inputs a df with relevant fields and date indicating when that information wa created 
+extract_essentials <- function(data, date){ 
+        data.frame(Title = data$Title,
+                   Leader= data$Proposer..Leader.s.,
+                   Members = data$Proposed.Development.Group,
+                   Status = data$Status,
+                   Date = date)
+                   }
+
+
 Isolate.Participants <- function(AString){
                                           # assume x a concatenated string of names
                                           x <- AString
