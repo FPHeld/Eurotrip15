@@ -1,0 +1,3 @@
+Relations_NodeMembership <- read.csv(file="./workingdata/Relations_NodeMembership_UTF8.csv", fileEncoding="UTF-8", stringsAsFactors=FALSE)
+Attributes_ProjectNodes <- read.csv(file="./workingdata/Attributes_ProjectNodes_UTF8.csv", fileEncoding="UTF-8", stringsAsFactors=FALSE)
+Attributes_Members <- read.csv(CPCMemberInfo_Short, ".\\workingdata\\Attributes_Members_UTF8.csv", fileEncoding="UTF-8", stringsAsFactors=FALSE)

@@ -38,6 +38,15 @@ identify_node_members <- function(Nodename, Leader, Members, Date){
     return(out)
 }
 
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+
+
+
+make_short_name <- function(AFullName){a <- regexpr("[a-z], [A-Z]", AFullName)
+                                        Last <- substr(AFullName, 1, a )
+                                        Initial <- substr(AFullName, (a+3), (a+3))
+                                        return(paste(Last, Initial, sep=" "))}
+
 
 Isolate.Participants <- function(AString){
                                           # assume x a concatenated string of names
