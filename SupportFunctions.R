@@ -30,6 +30,14 @@ merge_a_column <- function(dat, sourcedat, matchvar, valuevar){
     return(dat)
 }
 
+### Wrapper for Isolate Participants and Isolate.Leaders
+identify_node_members <- function(Nodename, Leader, Members, Date){
+    Leader <- Isolate.Leaders(as.character(Leader))
+    Participants <- Isolate.Participants(Members)
+    out <- cbind(ShortTitle = Nodename, Members = c(Leader, Participants), Date=Date)
+    return(out)
+}
+
 
 Isolate.Participants <- function(AString){
                                           # assume x a concatenated string of names
