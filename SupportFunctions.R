@@ -1,12 +1,34 @@
 # this function extracts the bare essentials about nodes from the raw files. 
 ## it expects inputs a df with relevant fields and date indicating when that information wa created 
 extract_essentials <- function(data, date){ 
-        data.frame(Title = data$Title,
-                   Leader= data$Proposer..Leader.s.,
-                   Members = data$Proposed.Development.Group,
-                   Status = data$Status,
-                   Date = date)
-                   }
+    if("Governance..Domain" %in% colnames(data)) {
+        tmp <- data.frame( Title = data$Title,
+                           Leader= data$Proposer..Leader.s.,
+                           Members = data$Proposed.Development.Group,
+                           Status = data$Status,
+                           MainDomain = data$Governance..Domain,
+                           MainTheme = data$Governance..Theme,
+                           Date = date)
+                           }
+    else { 
+        tmp <- data.frame( Title = data$Title,
+                           Leader= data$Proposer..Leader.s.,
+                           Members = data$Proposed.Development.Group,
+                           Status = data$Status,
+                           MainDomain = NA,
+                           MainTheme = NA,
+                           Date = date)
+                           }
+    return(tmp)
+    }
+# function for merging colum valuevar (as string) from df sourcedat to df dat, via joint variable matchvar (as string)
+## intended to be used when there are alos nas in sourcedat's valuevar column
+merge_a_column <- function(dat, sourcedat, matchvar, valuevar){
+    tmpdat <- sourcedat[!is.na(sourcedat[,valuevar]),]
+    matchorder <- match( dat[, matchvar], tmpdat[, matchvar] )
+     dat[, valuevar] <- tmpdat[, valuevar][matchorder]
+    return(dat)
+}
 
 
 Isolate.Participants <- function(AString){
@@ -24,7 +46,8 @@ Isolate.Participants <- function(AString){
                                           x <- gsub(x, pattern=" , ", replacement=", ")
                                           x <- gsub(x, pattern=" $", replacement="")
                                           participants.list <- strsplit(x, split=";#")[[1]]
-                                          return(data.frame(Leader = FALSE, Participant = TRUE, Researcher =  participants.list))
+                                          return(  participants.list)
+                                          #return(data.frame(Leader = FALSE, Participant = TRUE, Researcher =  participants.list))
                                           }
                                           #else{participants.list <- ""}
                                          }
@@ -42,7 +65,8 @@ Isolate.Leaders <- function(AString){
                                      x <- gsub(x, pattern=" , ", replacement=", ")
                                      x <- gsub(x, pattern=" $", replacement="")
                                      Leader.list <- strsplit(x, split=";#")[[1]]
-                                     return(data.frame(Leader = TRUE, Participant = FALSE, Researcher = Leader.list))
+                                     return(Leader.list)
+                                     #return(data.frame(Leader = TRUE, Participant = FALSE, Researcher = Leader.list))
                                      }
                                      #else{Leader.list <- ""}
                                      }
