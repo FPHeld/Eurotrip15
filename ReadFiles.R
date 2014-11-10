@@ -117,12 +117,6 @@ write.csv(CPCMemberInfo_Short, ".\\workingdata\\Attributes_Members_UTF8.csv", fi
 
 ##### Extract Citation Relationships from Citation Data #### 
 
-
-sourcefilesCitations
-
-
-
-
 Cite_Data <- data.frame()
 
 for ( i in sourcefilesCitations ){
@@ -136,8 +130,6 @@ for ( i in sourcefilesCitations ){
 
 Cite_Data <- Cite_Data[!duplicated(select(Cite_Data, -DataSource)), ]   # removes duplicates that may be downloaded in more than one dataset - should yield 17431 rows for 2011-13
 Cite_Data <- mutate(Cite_Data, Article.ID = 1:nrow(Cite_Data))     # Append a unique document identifier, in the absence of DOI/ISBN
-
-
 
 # write to external file b/c this df is very long and it is not known how long it will be at  the end
 
@@ -156,57 +148,41 @@ for (i in 2:nrow(Cite_Data)){
                                         }
 close(outfile)
 
-
 Cite_Data_Long <- read.csv(".\\workingData\\PublicationData_UTF8.csv", fileEncoding = "UTF-8")
-tail(Cite_Data_Long)
+
+CPCMemberInfo_Short <- read.csv(".\\workingdata\\Attributes_Members_UTF8.csv", fileEncoding="UTF-8", stringsAsFactors=FALSE)
 
 
 
-CPC_Names <-     as.character(unique(CPC_Member_Attributes$SimplAuth[ CPC_Member_Attributes$USYD]))
-CPC_Externals <- as.character(unique(CPC_Member_Attributes$SimplAuth[!CPC_Member_Attributes$USYD]))
-CPC_Externals <- substr(CPC_Externals, 6, nchar(CPC_Externals))
+
+# identify people with the name that matches CPC members
+select_matchCPCautors <- Cite_Data_Long$SimplAuth %in% CPCMemberInfo_Short$MatchName
+### identify usyd columns
+select_USydRows <- grepl(Cite_Data_Long$Affiliation, pattern="University of Sydney")
+
+#table(select_USydRows, select_matchCPCautors)
+
 CPC_New <- c("Gallagher R", "James D", "Raubenheimer D") 
-CPC_Externals <- c(CPC_Externals, CPC_New)
+select_newBiggies <- Cite_Data_Long$SimplAuth %in% CPC_New
+ # Cite_Data_Long[select_newBiggies & !select_USydRows,]
+# select all interesting, CPC related publications
 
-######## Workhorse, creating a long long list of Researchers x Articles x Keywords   ######################
+select_allCPC_members <- (select_newBiggies & !select_USydRows) | (select_USydRows & select_matchCPCautors)
+select_allCPC_ArtIDs <- Cite_Data_Long$ArtID[select_allCPC_members]
+select_allCPC_Coauthors <- Cite_Data_Long$ArtID %in% select_allCPC_ArtIDs
 
+##### enrich author properties
 
+Cite_Data_Long$USyd <- select_USydRows
+Cite_Data_Long$CPC  <- select_allCPC_members
 
+#### author properties
 
+Cite_Data_CPCPlus <- Cite_Data_Long[select_allCPC_Coauthors,]
 
+Attributes_Coauthors <- unique(select(Cite_Data_CPCPlus, Author, SimplAuth, USyd, CPC)) # careful, SimplAuth is too simple
+write.csv(Attributes_Coauthors, ".\\workingdata\\Attributes_Coauthors_UTF8.csv", fileEncoding="UTF-8")
 
-                            
-                            
-                            
-                            # Identify the Uni of Sydney Authors
-                            USydRows <- unlist(lapply( tmpAffiliations, function(x){grepl( x, pattern="University of Sydney")}))
-                            # Check if those authors with an affiliation to USyd actually match CPC participants
-                            MatchCPC <- SimplAuth %in% CPC_Names
-                            
-                            MatchCPCExt <- SimplAuth %in% CPC_Externals
-                            # If USydRows and MatchCPC are both true, this suggestss that we have identified the right person (would exclude david Raubenheimer tho)
-                            
-                            # add prefit "ext_" to those author names that are not USyd and not a CPC external member
-                            prefix <- rep("", length(SimplAuth) )
-                            prefix[!USydRows] <- "x_"
-                            prefix[!USydRows & MatchCPCExt] <- "CPCx_"
-                            SimplAuth <- paste(prefix, SimplAuth, sep="")
-                            
-                            CPC_Pub <- sum(USydRows & MatchCPC) + sum(!USydRows & MatchCPCExt) > 0
-                            twoAA   <- data.frame(Author=tmpAuthors, 
-                                                  Affiliation=tmpAffiliations, 
-                                                  SimplAuth=SimplAuth, 
-                                                  SydAfil=USydRows, 
-                                                  MatchCPC=MatchCPC, 
-                                                  MatchCPCExt=MatchCPCExt)
-                            
-                            OtherPublDetails <- data.frame(CPC_Pub=CPC_Pub, Title = tmprow$Title, Year = tmprow$Year, ArtID=tmprow$Article.ID)
-                           
-
-                            step1 <- merge(twoAA, OtherPublDetails)
-
-
-
-
-
+Relationships_Coauthors <- select(Cite_Data_CPCPlus, Author, ArtID, Year)
+write.csv(Relationships_Coauthors, file="./workingdata/Relationships_Coauthors_UTF8.csv", fileEncoding="UTF-8")
 
