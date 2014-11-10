@@ -35,7 +35,7 @@ ShortNodeInfo <- ShortNodeInfo[ShortNodeInfo$Status == "Active" & !is.na(ShortNo
 
 ShortNodeInfo$ShortTitle <- tolower(substr(ShortNodeInfo$Title, start=1, stop=20))
 
-##### Extract main info about CPC Nodes:  "Title"      "ShortTitle" "MainDomain" "MainTheme" ####
+###### Extract main info about CPC Nodes:  "Title"      "ShortTitle" "MainDomain" "MainTheme" ####
 
 MinimalNodeInfo <- unique(select(ShortNodeInfo, Title, ShortTitle))
 
@@ -50,17 +50,17 @@ write.csv(MinimalNodeInfo, file="./workingdata/Attributes_ProjectNodes_UTF8.csv"
 ### MinimalNodeInfo[,2:4]
 ###select(ShortNodeInfo, Title, MainDomain, MainTheme)
 
-#### Extract main info about node membership: MembershipInfo $ "ShortTitle" "Members"    "Date"    ####
+###### Extract main info about node membership: MembershipInfo $ "ShortTitle" "Members"    "Date"    ####
 
 # extract membership information from ShortNodeInfo
-MembershipInfo <- data.frame(ShortTitle=character(), Members=character(), Date=numeric())
+MembershipInfo <- data.frame(ShortTitle=character(), Members=character(), Date=character(), stringsAsFactors = FALSE)
 
 for (i in 1:nrow(ShortNodeInfo)){
     MembershipInfo <- rbind( MembershipInfo, 
                              identify_node_members(Nodename=ShortNodeInfo$ShortTitle[i], 
                                                    Leader=ShortNodeInfo$Leader[i], 
                                                    Members=ShortNodeInfo$Members[i],
-                                                   Date = ShortNodeInfo$Date[i]
+                                                   Date = as.character(ShortNodeInfo$Date[i])
                                                    )
                             )
     }
@@ -82,8 +82,6 @@ for (i in 1:nrow(ShortNodeInfo)){
         MembershipInfo$Members <- tmpResearcher
         
        # sort(unique(MembershipInfo$ShortTitle))  ## did the preconception study change its name at some point?
-
-
 
 
 write.csv(MembershipInfo, file="./workingdata/Relations_NodeMembership_UTF8.csv", fileEncoding="UTF-8")
@@ -115,7 +113,7 @@ write.csv(CPCMemberInfo_Short, ".\\workingdata\\Attributes_Members_UTF8.csv", fi
     
     
 
-##### Extract Citation Relationships from Citation Data #### 
+###### Extract Citation Relationships from Citation Data #### 
 
 Cite_Data <- data.frame()
 
