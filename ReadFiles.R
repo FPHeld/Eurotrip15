@@ -6,7 +6,8 @@ source(file="SupportFunctions.R")
 
 sourcefilesNodes <- list.files(path="./rawdata/rawNodeData")
 sourcefilesPeople <- "2014 08 25 CPC Contacts.xlsx"
-sourcefilesCitations <- list.files(path="./rawdata/dat_CitationData")
+sourcefilesCitations <- list.files(path="./rawdata/dat_CitationData", recursive=TRUE ,  include.dirs = TRUE, pattern="*.csv")
+sourcefilesCitations <- sourcefilesCitations[-c(13, 26, 31)]  #  ignore "2013_1.csv" 
 
 ##### Read CPC Node data from dumps: store info in ShortNodeInfo ##########
 
@@ -120,102 +121,44 @@ write.csv(CPCMemberInfo_Short, ".\\workingdata\\Attributes_Members_UTF8.csv", fi
 sourcefilesCitations
 
 
-#CountryNames<- read.csv("CountryNamesEN.csv", as.is=TRUE, header = FALSE)$V1
-
-CPC_Member_Attributes <- read.csv(".\\WorkingFiles\\Attributes_CPCMembers_UTF8.csv",  fileEncoding="UTF-8")
-
-Raw.File.Names <- dir(".\\Data\\dat_CitationData")
 
 
 Cite_Data <- data.frame()
 
-for ( i in sourcefilesCitations ){tmp <- read.csv(paste(".\\rawdata\\dat_CitationData\\", i, sep=""), as.is=TRUE, header = TRUE, encoding="UTF-8")  
-                            #concatenate file name and path
-                            #str(imported.data)
-                            names(tmp)[1] <- "Authors"
-                            tmp <- cbind(tmp, DataSource = i)
+for ( i in sourcefilesCitations ){
+                            tmp <- read.csv(paste(".\\rawdata\\dat_CitationData\\", i, sep=""), as.is=TRUE, header = TRUE, encoding="UTF-8")  
+                                tmp_short <- select(tmp, Title, Year, Authors.with.affiliations, Author.Keywords, Index.Keywords)
+                                tmp_short <- cbind(tmp_short, DataSource = i)
                             print(i)
-                            Cite_Data <- rbind(Cite_Data, tmp)
+                                Cite_Data <- rbind(Cite_Data, tmp_short)
                             }
 
-#Cite_Data$Authors.with.affiliations[30000]
 
-nrow(Cite_Data)
-colnames(Cite_Data)
-Cite_Data <- Cite_Data[!duplicated(Cite_Data[, -21]), ]   # removes duplicates that may be downloaded in more than one dataset - should yield 17431 rows for 2011-13
-nrow(Cite_Data)
-
+Cite_Data <- Cite_Data[!duplicated(select(Cite_Data, -DataSource)), ]   # removes duplicates that may be downloaded in more than one dataset - should yield 17431 rows for 2011-13
 Cite_Data <- mutate(Cite_Data, Article.ID = 1:nrow(Cite_Data))     # Append a unique document identifier, in the absence of DOI/ISBN
-dim(Cite_Data)
-colnames(Cite_Data)
-names(Cite_Data)
 
 
-Cite_Data <- Cite_Data[-15601,] #Trouble with: Ho?bye, C., Department of Endocrinology, Metabolism, and Diabetology, Karolinska University Hospital, SE-17176 Stockholm, Sweden;
 
-#filter(AllData, Article.ID == 1)
-#AllData[15601,]
-#
-#dplyr::filter(AllData, Article.ID==15602)
+# write to external file b/c this df is very long and it is not known how long it will be at  the end
 
+outfile <- file(description = ".\\workingData\\PublicationData_UTF8.csv", open = "w", blocking = TRUE, encoding = "UTF-8")
+write.table(Make_Long_Author_DF(Cite_Data, index=1),
+            file = outfile, append = FALSE, row.names = FALSE, fileEncoding = "UTF-8",  sep = ",",
+            quote = c(1,2,3,4), qmethod = "double", eol = "\n", na = "NA", dec = ".", col.names = TRUE)
+            
 
-# Define Scopus specific procedures to extract the data in individual columns
-# split and merge the two keyword columns
-
-Isolate.Keywords <- function(AK, IK){
-                                     AKeywords.list <- strsplit(AK, split="; " )[[1]]
-                                     IKeywords.list <- strsplit(IK, split="; " )[[1]]
-                                     return(  c(AKeywords.list, IKeywords.list)  )
-                                    }
-
-# very simple stemming algorithm- essentially changes all words to lower case and cuts off most terminal s's
-SimpleStem <- function(x){
-                           tmpString <- x
-                           if (tmpString != "")
-                                 {
-                                 tmpString <- tolower(tmpString)
-                                 if ( !grepl(tmpString, pattern="ss$") && !grepl(tmpString, pattern="is$") && grepl(tmpString, pattern="s$")){ tmpString <- sub(tmpString, pattern="s$", replacement="")}
-                                 if ( grepl(tmpString, pattern="^the ")){ tmpString <- sub(tmpString, pattern="^the ", replacement="")}
-                                 }
-
-                           return(tmpString)
-                          }
+for (i in 2:nrow(Cite_Data)){
+                            write.table(Make_Long_Author_DF(Cite_Data, index=i), 
+                                        file = outfile, append = TRUE, 
+                                        row.names = FALSE, fileEncoding = "UTF-8",  sep = ",",
+                                        quote = c(1,2,3,4), qmethod = "double", eol = "\n", na = "NA", dec = ".", col.names = FALSE)
+                                        print(i)
+                                        }
+close(outfile)
 
 
-# Extract authors' names for each publication  from a list like  "SurnameA, XA. AffiliationA1, CountryA1, AffiliationA2, CountryA2;" or
-                                                              #  "SurnameB, XB. AffiliationB1, CountryB1, AffiliationB2, CountryB2"
-Isolate.Name <- function(x){
-                            if (mode(x) != "character") stop("Input is not a Character String")
-                            if (nchar(x) == 0) stop("Affiliation is empty")
-                            # name is at the beginning and ends with an "., "
-                            tmpEnd <- regexpr("[A-Z]\\., ", x)[1] + 1 # includes the period behind the name
-                            #Extract the name
-                            Indiv.Author.Name <- substr(x, start=1, stop=tmpEnd)
-                            # Remove Comma after Surname
-                           # Indiv.Author.Name <- gsub(Indiv.Author.Name, pattern=",", replacement="")
-                            # Should there be a middle innitial, this will be cut, b/c such information is not available in the CPC data dump
-                            return(Indiv.Author.Name)
-                            }
-
-
-# To be Applied to the column that contains "SurnameA, XA. AffiliationA1, CountryA1, AffiliationA2, CountryA2; SurnameB, XB. AffiliationB1, CountryB1, AffiliationB2, CountryB2"
-Isolate.Affiliation <- function(x){
-                                   if (mode(x) != "character") stop("Input is not a Character String")
-                                   if (nchar(x) == 0) stop("No affiliation provided")
-                                  # cut after name at the beginning and ending with "., "
-                                  tmpEnd <- regexpr("[A-Z]\\., ", x)[1] + 1 # includes the period behind the name
-                                  #Extract the name
-                                  #Syd.Author.Name <- substr(x=SydneyAutors[1], start=1, stop=tmpEnd)
-                                  All.Author.Affiliations <- substr(x, start=tmpEnd + 3, stop=nchar(x))
-                                  return(All.Author.Affiliations)
-                                  }
-
-
-Match.Name <- function(x){
-                           if (mode(x) != "character") stop("Input is not a Character String")
-                           if (nchar(x) == 0) stop("No name provided")
-                          }
-
+Cite_Data_Long <- read.csv(".\\workingData\\PublicationData_UTF8.csv", fileEncoding = "UTF-8")
+tail(Cite_Data_Long)
 
 
 
@@ -229,25 +172,12 @@ CPC_Externals <- c(CPC_Externals, CPC_New)
 
 
 
-# Run in separate batches of 1000 or 2000 entries each (algorithm slows down)
 
-outfile <- file(description = ".\\WorkingFiles\\PublicationData_UTF8.csv", open = "w", blocking = TRUE, encoding = "UTF-8")
-#open(outfile, open = "a", blocking = TRUE)
-for (i in 1:nrow(Cite_Data)){
-#  for (i in 1:10){
-    # AUTHORS AND AFFILIATIONS
-                            # i <- 81
-                            tmprow <- Cite_Data[i,]
-                            # tmprow <- Cite_Data[2509,] 
 
-                            tmpAuthAfil  <- strsplit(tmprow$Authors.with.affiliations, split="; " )[[1]]
-                            tmpAuthors   <- unlist(lapply(tmpAuthAfil, Isolate.Name))
-                            tmpAffiliations <- unlist(lapply(tmpAuthAfil,Isolate.Affiliation ))
 
-                            SimplAuth <- unlist(lapply(tmpAuthors, function(x){Endcut <- regexpr(x, pattern=",[[:space:]][[:upper:]].")
-                                                return(paste(substr(x, 1, (Endcut - 1)), substr(x, (Endcut + 2), (Endcut + 2)), sep=" " )) }
-                                                ))
-
+                            
+                            
+                            
                             # Identify the Uni of Sydney Authors
                             USydRows <- unlist(lapply( tmpAffiliations, function(x){grepl( x, pattern="University of Sydney")}))
                             # Check if those authors with an affiliation to USyd actually match CPC participants
@@ -263,70 +193,17 @@ for (i in 1:nrow(Cite_Data)){
                             SimplAuth <- paste(prefix, SimplAuth, sep="")
                             
                             CPC_Pub <- sum(USydRows & MatchCPC) + sum(!USydRows & MatchCPCExt) > 0
-                            #if (CPC_Pub) print(tmprow)
+                            twoAA   <- data.frame(Author=tmpAuthors, 
+                                                  Affiliation=tmpAffiliations, 
+                                                  SimplAuth=SimplAuth, 
+                                                  SydAfil=USydRows, 
+                                                  MatchCPC=MatchCPC, 
+                                                  MatchCPCExt=MatchCPCExt)
                             
-                            # KEYWORDS
-                      #     tmpKeys <- Isolate.Keywords(tmprow$Author.Keywords, tmprow$Index.Keywords)
-                      #     tmpSimplKeys <- unlist(lapply(tmpKeys, SimpleStem))
-                      #     if (length(unique(tmpSimplKeys)) < length(tmpSimplKeys)){
-                      #                                                              tmpKeys <- tmpKeys[!duplicated(tmpSimplKeys)]
-                      #                                                              tmpSimplKeys <- tmpSimplKeys[!duplicated(tmpSimplKeys)]
-                      #                                                              }
-                      #     length(tmpKeys) == 0
-                            
-                            
-                           # The following section combines all the relevant infromation for each row of data
-                      #        twoKeys <- data.frame(Key=tmpKeys, SimplKey=tmpSimplKeys)
-                      #        if (nrow(twoKeys) == 0){twoKeys <- data.frame(Key=NA, SimplKey=NA)}
-                            twoAA   <- data.frame(Author=tmpAuthors, Affiliation=tmpAffiliations, SimplAuth=SimplAuth, 
-                                                  SydAfil=USydRows, MatchCPC=MatchCPC, MatchCPCExt=MatchCPCExt)
                             OtherPublDetails <- data.frame(CPC_Pub=CPC_Pub, Title = tmprow$Title, Year = tmprow$Year, ArtID=tmprow$Article.ID)
                            
-                           # INFO on CPC Involvement - extends the twoAA df, by adding information of the Authors' CPC node involvement
-                         #  New_Entries <- data.frame()
-#                           for (j in 1:nrow(twoAA)){
-#                                                    tmpentry <- twoAA[j,]
-#                                                    if (USydRows[j]){
-#                                                                     CPCParticipant = FALSE
-#                                                                     ProjectNode = ""
-#                                                                     tmpName <- tmpentry$Author
-#                                                                     NodeIndexes <- unlist( lapply ( CPC.Projects$MatchName, FUN=function(z){ regexpr(z, tmpName) > 0 } ) )
-#                                                                     if (sum(NodeIndexes) > 0) {CPCParticipant = TRUE}
-#                                                                     extdRow <- merge(cbind(tmpentry, CPCParticipant), data.frame(ProjectNode = CPC.Projects$Title[NodeIndexes]))
-#                                                                     }
-#                                                                     else
-#                                                                     {
-#                                                                      CPCParticipant = FALSE
-#                                                                      ProjectNode = ""
-#                                                                      extdRow <- cbind(tmpentry, CPCParticipant, data.frame(ProjectNode = ProjectNode))
-#                                                                     }
-#                                                    New_Entries <- rbind(New_Entries, extdRow)
-#                                                    }
 
-                                step1 <- merge(twoAA, OtherPublDetails)
-                                #step2 <- merge(step1, twoKeys)
-                                     ###LongList <- rbind(LongList, step2)
-
-                            
-                            #### writing only step1 to output makes this list a lot shorter, as it ignores the many many keywords.
-if (i == 1) {write.table(step1, file = outfile, append = FALSE, row.names = FALSE, fileEncoding = "UTF-8",  sep = ",",
-                         quote = c(1,2,3,8), qmethod = "double", eol = "\n", na = "NA", dec = ".", col.names = TRUE)
-                         } else
-            {write.table(step1, file = outfile, append = TRUE, row.names = FALSE, fileEncoding = "UTF-8",  sep = ",",
-                         quote = c(1,2,3,8), qmethod = "double", eol = "\n", na = "NA", dec = ".", col.names = FALSE)
-                        }
-#if (i == 1) {write.table(step2, file = outfile, append = TRUE, row.names = FALSE, fileEncoding = "UTF-8",  sep = ",",
-#                         quote = c(1,2,3,6,9,10), qmethod = "double", eol = "\n", na = "NA", dec = ".", col.names = TRUE)
-#                         } else
-#            {write.table(step2, file = outfile, append = TRUE, row.names = FALSE, fileEncoding = "UTF-8",  sep = ",",
-#                         quote = c(1,2,3,6,9,10), qmethod = "double", eol = "\n", na = "NA", dec = ".", col.names = FALSE)
- #                        }
-# Do nothing if none of the matching authors have a USyd affiliation
-print(i)
-}
-close(outfile)
-
-
+                            step1 <- merge(twoAA, OtherPublDetails)
 
 
 

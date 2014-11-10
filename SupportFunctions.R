@@ -87,3 +87,85 @@ Isolate.Leaders <- function(AString){
                                      }
                                      #else{Leader.list <- ""}
                                      }
+
+#### strings for extraction author/affiliation information from Authors.with.affiliations field
+
+# Extract authors' names for each publication  from a list like  "SurnameA, XA. AffiliationA1, CountryA1, AffiliationA2, CountryA2;" or
+                                                              #  "SurnameB, XB. AffiliationB1, CountryB1, AffiliationB2, CountryB2"
+Isolate.Name <- function(x){
+                            if (mode(x) != "character") stop("Input is not a Character String")
+                            if (nchar(x) == 0) stop("Affiliation is empty")
+                            # name is at the beginning and ends with an "., "
+                            tmpEnd <- regexpr("[A-Z]\\., ", x)[1] + 1 # includes the period behind the name
+                            #Extract the name
+                            Indiv.Author.Name <- substr(x, start=1, stop=tmpEnd)
+                            # Remove Comma after Surname
+                           # Indiv.Author.Name <- gsub(Indiv.Author.Name, pattern=",", replacement="")
+                            # Should there be a middle innitial, this will be cut, b/c such information is not available in the CPC data dump
+                            return(Indiv.Author.Name)
+                            }
+
+
+# To be Applied to the column that contains "SurnameA, XA. AffiliationA1, CountryA1, AffiliationA2, CountryA2; SurnameB, XB. AffiliationB1, CountryB1, AffiliationB2, CountryB2"
+Isolate.Affiliation <- function(x){
+                                   if (mode(x) != "character") stop("Input is not a Character String")
+                                   if (nchar(x) == 0) stop("No affiliation provided")
+                                  # cut after name at the beginning and ending with "., "
+                                  tmpEnd <- regexpr("[A-Z]\\., ", x)[1] + 1 # includes the period behind the name
+                                  #Extract the name
+                                  #Syd.Author.Name <- substr(x=SydneyAutors[1], start=1, stop=tmpEnd)
+                                  All.Author.Affiliations <- substr(x, start=tmpEnd + 3, stop=nchar(x))
+                                  return(All.Author.Affiliations)
+                                  }
+
+
+### bring all the author and affiliation information together in one long data frame  #####
+Make_Long_Author_DF <- function(widedat, index){
+                            
+                            tmprow <- widedat[index,]
+                            tmpAuthAfil  <- strsplit(tmprow$Authors.with.affiliations, split="; " )[[1]]
+                            tmpAuthors   <- unlist(lapply(tmpAuthAfil, Isolate.Name))
+                            tmpAffiliations <- unlist(lapply(tmpAuthAfil,Isolate.Affiliation ))
+
+                            SimplAuth <- unlist(lapply(tmpAuthors, function(x){Endcut <- regexpr(x, pattern=",[[:space:]][[:upper:]].")
+                                                                                 return(paste(substr(x, 1, (Endcut - 1)), substr(x, (Endcut + 2), (Endcut + 2)),
+                                                                                              sep=" " )) }
+                                                ))
+                            output   <- data.frame(Author=tmpAuthors, 
+                                                  Affiliation=tmpAffiliations, 
+                                                  SimplAuth=SimplAuth,  
+                                                  #Title = tmprow$Title, 
+                                                  Year = tmprow$Year, 
+                                                  ArtID=tmprow$Article.ID)
+                            return(output)                                
+}
+
+# Match.Name <- function(x){
+#                            if (mode(x) != "character") stop("Input is not a Character String")
+#                            if (nchar(x) == 0) stop("No name provided")
+#                           }
+
+
+
+##### string manipulation for keywords
+
+Isolate.Keywords <- function(AK, IK){
+                                     AKeywords.list <- strsplit(AK, split="; " )[[1]]
+                                     IKeywords.list <- strsplit(IK, split="; " )[[1]]
+                                     return(  c(AKeywords.list, IKeywords.list)  )
+                                    }
+
+# very simple stemming algorithm- essentially changes all words to lower case and cuts off most terminal s's
+SimpleStem <- function(x){
+                           tmpString <- x
+                           if (tmpString != "")
+                                 {
+                                 tmpString <- tolower(tmpString)
+                                 if ( !grepl(tmpString, pattern="ss$") && !grepl(tmpString, pattern="is$") && grepl(tmpString, pattern="s$")){ tmpString <- sub(tmpString, pattern="s$", replacement="")}
+                                 if ( grepl(tmpString, pattern="^the ")){ tmpString <- sub(tmpString, pattern="^the ", replacement="")}
+                                 }
+
+                           return(tmpString)
+                          }
+
+
