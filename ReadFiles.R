@@ -24,12 +24,15 @@ ShortNodeInfo <- rbind(
                         extract_essentials(RawNodeInfo[[2]], as.Date("130816", "%y%m%d")),
                         extract_essentials(RawNodeInfo[[3]], as.Date("140220", "%y%m%d")),
                         extract_essentials(RawNodeInfo[[4]], as.Date("140429", "%y%m%d")),
-                        extract_essentials(RawNodeInfo[[5]], as.Date("140825", "%y%m%d"))
+                        extract_essentials(RawNodeInfo[[5]], as.Date("140825", "%y%m%d")), 
+                        extract_essentials(RawNodeInfo[[6]], as.Date("141118", "%y%m%d"))
                       )    
 
-ShortNodeInfo <- ShortNodeInfo[ShortNodeInfo$Status == "Active" & !is.na(ShortNodeInfo$Status) & 
-                                   nchar(as.character(ShortNodeInfo$Leader)) > 0 &
-                                   nchar(as.character(ShortNodeInfo$Members)) > 0 , ]
+NodesOfInterest <- c("Active",  "Active Clinical project node")   
+ShortNodeInfo <- ShortNodeInfo[ShortNodeInfo$Status %in% NodesOfInterest & 
+                                    !is.na(ShortNodeInfo$Status) & 
+                                    nchar(as.character(ShortNodeInfo$Leader)) > 0 ] #
+                               #& nchar(as.character(ShortNodeInfo$Members)) > 0, ]
 
 # sapply(ShortNodeInfo$Members, FUN=function(x)(nchar(as.character(x))))
 
@@ -42,6 +45,7 @@ MinimalNodeInfo <- unique(select(ShortNodeInfo, Title, ShortTitle))
 
 MinimalNodeInfo <- merge_a_column(dat=MinimalNodeInfo, sourcedat=ShortNodeInfo, matchvar="Title", valuevar="MainDomain")
 MinimalNodeInfo <- merge_a_column(dat=MinimalNodeInfo, sourcedat=ShortNodeInfo, matchvar="Title", valuevar="MainTheme")
+MinimalNodeInfo <- merge_a_column(dat=MinimalNodeInfo, sourcedat=ShortNodeInfo, matchvar="Title", valuevar="Node_Type")
 
 dir.create("./workingData")
 write.csv(MinimalNodeInfo, file="./workingdata/Attributes_ProjectNodes_UTF8.csv", fileEncoding="UTF-8")
@@ -146,28 +150,84 @@ for (i in 2:nrow(Cite_Data)){
                                         }
 close(outfile)
 
-Cite_Data_Long <- read.csv(".\\workingData\\PublicationData_UTF8.csv", fileEncoding = "UTF-8")
+
+# can start from here !!!!!!!!!!!!!!!!!!!
+Cite_Data_Long <- read.csv(".\\workingData\\PublicationData_UTF8.csv", fileEncoding = "UTF-8", stringsAsFactors=FALSE)
 
 CPCMemberInfo_Short <- read.csv(".\\workingdata\\Attributes_Members_UTF8.csv", fileEncoding="UTF-8", stringsAsFactors=FALSE)
 
 
 
+#### task is to identify all those publications that are written by a CPC member
+        ## (danger, external members will not be (independently) in the db to begin with.
+### Only of interest are those that match the MatchName from CPCMemberInfo_Short that come from USYD
+select_CPC_INT <- CPCMemberInfo_Short$Faculty.Affiliation != "External to University of Sydney"
+select_CPC_EXT <- CPCMemberInfo_Short$Faculty.Affiliation == "External to University of Sydney"
+#### correct are most likely those that have an affiliation that agreps the Faculty.Affiliation from CPCMemberInfo_Short
 
-# identify people with the name that matches CPC members
-select_matchCPCautors <- Cite_Data_Long$SimplAuth %in% CPCMemberInfo_Short$MatchName
-### identify usyd columns
+select_match_INT_CPCautors <- Cite_Data_Long$SimplAuth %in% CPCMemberInfo_Short$MatchName[select_CPC_INT]
+select_match_EXT_CPCautors <- Cite_Data_Long$SimplAuth %in% CPCMemberInfo_Short$MatchName[select_CPC_EXT]
+
+#### these are all the autors that match the CPC SimplAuth
+select_matchCPCautors <- select_match_INT_CPCautors | select_match_EXT_CPCautors
+
 select_USydRows <- grepl(Cite_Data_Long$Affiliation, pattern="University of Sydney")
 
 #table(select_USydRows, select_matchCPCautors)
 
 CPC_New <- c("Gallagher R", "James D", "Raubenheimer D") 
 select_newBiggies <- Cite_Data_Long$SimplAuth %in% CPC_New
- # Cite_Data_Long[select_newBiggies & !select_USydRows,]
+
+CPC_Ext <- CPCMemberInfo_Short$MatchName[CPCMemberInfo_Short$Faculty.Affiliation == "External to University of Sydney"]
+
+# Cite_Data_Long[select_newBiggies & !select_USydRows,]
 # select all interesting, CPC related publications
 
-select_allCPC_members <- (select_newBiggies & !select_USydRows) | (select_USydRows & select_matchCPCautors)
+select_allCPC_members <- (select_newBiggies & !select_USydRows) |
+                            (select_USydRows & select_match_INT_CPCautors) | 
+                            (!select_USydRows & select_match_EXT_CPCautors)
+
+###### round of quality checking - how does this look like with faculties?
+
+## filter those that match the SimplAuth + Affiliation criteria in select_allCPC_members
+QualCheck <- select( filter(Cite_Data_Long, select_allCPC_members), Author, Affiliation, SimplAuth )
+QualCheck$Author <- as.character(QualCheck$Author)
+QualCheck$Affiliation <- as.character(QualCheck$Affiliation)
+QualCheck$SimplAuth <- as.character(QualCheck$SimplAuth)
+QualCheck <- QualCheck[!duplicated(QualCheck$Author ), ]
+QualCheck <- QualCheck[order(QualCheck$SimplAuth),]
+write.csv(QualCheck, ".\\workingdata\\ForManualQualCheck_UTF8.csv", fileEncoding="UTF-8")
+
+QualChecked <- read.csv(file=".\\workingdata\\ForManualQualCheck_UTF8_out141117.csv", fileEncoding="UTF-8")
+head(QualChecked)
+
+
+FALSE_Matches <- as.character(QualChecked$Author[!QualChecked$Working])
+
+FALSE_Matches_publications <- Cite_Data_Long$Author %in% FALSE_Matches
+
+#summary(FALSE_Matches_publications)
+#   Mode   FALSE    TRUE    NA's 
+#logical 1055880    1523       0 
+
+#summary(select_allCPC_members)
+#  Mode   FALSE    TRUE    NA's 
+#logical 1050471    6932       0
+
+
+#### 6015 publications that we can be pretty certain come from CPC affiliated authors 
+select_allCPC_members <- select_allCPC_members & (!FALSE_Matches_publications)
+#summary(select_allCPC_members)
+#   Mode   FALSE    TRUE    NA's 
+#logical 1051388    6015       0 
+
+
+# now identify other collaborators by numbers
 select_allCPC_ArtIDs <- Cite_Data_Long$ArtID[select_allCPC_members]
 select_allCPC_Coauthors <- Cite_Data_Long$ArtID %in% select_allCPC_ArtIDs
+summary(select_allCPC_Coauthors) # - this blows up rather quickly 
+#   Mode   FALSE    TRUE    NA's 
+#logical  927302  130101       0 
 
 ##### enrich author properties
 
@@ -176,7 +236,7 @@ Cite_Data_Long$CPC  <- select_allCPC_members
 
 #### author properties
 
-Cite_Data_CPCPlus <- Cite_Data_Long[select_allCPC_Coauthors,]
+Cite_Data_CPCPlus <- Cite_Data_Long[select_allCPC_Coauthors,] ### all CPC affils and their coauthors
 
 Attributes_Coauthors <- unique(select(Cite_Data_CPCPlus, Author, SimplAuth, USyd, CPC)) # careful, SimplAuth is too simple
 write.csv(Attributes_Coauthors, ".\\workingdata\\Attributes_Coauthors_UTF8.csv", fileEncoding="UTF-8")
