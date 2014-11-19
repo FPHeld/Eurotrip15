@@ -8,6 +8,10 @@ extract_essentials <- function(data, date){
                            Status = data$Status,
                            MainDomain = data$Governance..Domain,
                            MainTheme = data$Governance..Theme,
+                           Node_Type = Activity.Type,
+                           #EOIApproval_date =  data$EOI.approval.date,
+                           #Commencement_date = data$Commencement.date,
+                           #Completion.date = data$Completion.date,
                            Date = date)
                            }
     else { 
@@ -17,17 +21,22 @@ extract_essentials <- function(data, date){
                            Status = data$Status,
                            MainDomain = NA,
                            MainTheme = NA,
+                           Node_Type = Activity.Type,
+                          #EOIApproval_date =  data$EOI.approval.date,
+                           #Commencement_date = data$Commencement.date,
+                           #Completion.date = data$Completion.date,
                            Date = date)
                            }
     return(tmp)
     }
-# function for merging colum valuevar (as string) from df sourcedat to df dat, via joint variable matchvar (as string)
+
+# function for merging column valuevar (as string) from df sourcedat to df dat, via joint variable matchvar (as string)
 ## intended to be used when there are alos nas in sourcedat's valuevar column
 merge_a_column <- function(dat, sourcedat, matchvar, valuevar){
-    tmpdat <- sourcedat[!is.na(sourcedat[,valuevar]),]
-    matchorder <- match( dat[, matchvar], tmpdat[, matchvar] )
-     dat[, valuevar] <- tmpdat[, valuevar][matchorder]
-    return(dat)
+                            tmpdat <- sourcedat[!is.na(sourcedat[,valuevar]),]
+                            matchorder <- match( dat[, matchvar], tmpdat[, matchvar] ) # match returns a vector of the positions of (first) matches of its first argument in its second.
+                             dat[, valuevar] <- tmpdat[, valuevar][matchorder]
+                            return(dat)
 }
 
 ### Wrapper for Isolate Participants and Isolate.Leaders
